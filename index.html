@@ -74,3 +74,8 @@
     'CryptoJS.AES: ' + typeof (CryptoJS && CryptoJS.AES);
   document.body.appendChild(debug);
 </script>
+<script>
+  console.log("CryptoJS:", typeof CryptoJS);         // "object" ならOK
+  console.log("CryptoJS.AES:", typeof CryptoJS.AES); // "function" ならOK
+</script>
+
