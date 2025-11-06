@@ -1,10 +1,13 @@
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open('qr-cache').then(cache => {
+    caches.open('qr-cache-v2').then(cache => {
       return cache.addAll([
         './',
         './index.html',
-        './crypto-js.min.js',
+        './core.js',
+        './aes.js',
+        './sha256.js',
+        './enc-base64.js',
         './html5-qrcode.min.js',
         './manifest.json',
         './icon-192.png',
@@ -21,3 +24,4 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+
