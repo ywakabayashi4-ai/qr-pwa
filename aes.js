@@ -1,4 +1,3 @@
-
 (function () {
     // Shortcuts
     var C = CryptoJS;
