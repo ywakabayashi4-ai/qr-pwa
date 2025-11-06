@@ -64,7 +64,13 @@
   </script>
 </body>
 </html>
-
-
-
-
+<script>
+  const debug = document.createElement('pre');
+  debug.style.background = '#eee';
+  debug.style.padding = '1em';
+  debug.style.marginTop = '2em';
+  debug.textContent = 
+    'CryptoJS: ' + typeof CryptoJS + '\n' +
+    'CryptoJS.AES: ' + typeof (CryptoJS && CryptoJS.AES);
+  document.body.appendChild(debug);
+</script>
