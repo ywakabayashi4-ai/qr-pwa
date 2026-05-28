@@ -10,11 +10,17 @@
 
   <link rel="manifest" href="manifest.json">
 
+  <!-- CryptoJS -->
   <script src="core.js"></script>
   <script src="sha256.js"></script>
   <script src="cipher-core.js"></script>
   <script src="aes.js"></script>
   <script src="enc-base64.js"></script>
+
+  <!-- zlib inflate -->
+  <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+
+  <!-- QR Reader -->
   <script src="html5-qrcode.min.js"></script>
 
   <script>
@@ -43,6 +49,7 @@
       background: #fff;
       padding: 1em;
       border-radius: 8px;
+      word-break: break-word;
     }
 
     input,
@@ -50,128 +57,190 @@
       margin-top: 0.5em;
       padding: 0.5em;
       font-size: 1em;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    button {
+      background: #2196f3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+
+    button:hover {
+      opacity: 0.9;
+      cursor: pointer;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
     }
   </style>
 </head>
 
 <body>
 
-  <h2>QRコード復号ツール</h2>
+  <div class="container">
 
-  <div id="reader"></div>
+    <h2>QRコード復号ツール</h2>
 
-  <input
-    type="password"
-    id="password"
-    placeholder="パスワードを入力"
-  >
+    <div id="reader"></div>
 
-  <button onclick="decrypt()">
-    復号する
-  </button>
+    <input
+      type="password"
+      id="password"
+      placeholder="パスワードを入力"
+    >
 
-  <div id="result">
-    QRコードを読み取ってください。
+    <button onclick="decrypt()">
+      復号する
+    </button>
+
+    <div id="result">
+      QRコードを読み取ってください。
+    </div>
+
   </div>
 
   <script>
 
     let encryptedText = "";
 
+    // -----------------------------
     // QRコード読み取り
+    // -----------------------------
     const qr = new Html5Qrcode("reader");
 
     qr.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: 250 },
+      {
+        fps: 10,
+        qrbox: 250
+      },
 
+      // 読み取り成功
       (decodedText) => {
 
         encryptedText = decodedText;
 
         document.getElementById("result").textContent =
-          "QR読み取り成功。パスワードを入力して復号してください。";
+          "QR読み取り成功。\nパスワードを入力して復号してください。";
 
         qr.stop();
       },
 
-      (errorMessage) => {}
+      // 読み取り失敗
+      (errorMessage) => {
+        // 必要ならログ
+        // console.log(errorMessage);
+      }
     );
 
+    // -----------------------------
     // 復号処理
+    // -----------------------------
     function decrypt() {
 
       const password =
         document.getElementById("password").value;
 
+      if (!encryptedText) {
+
+        document.getElementById("result").textContent =
+          "QRコードを先に読み取ってください。";
+
+        return;
+      }
+
+      if (!password) {
+
+        document.getElementById("result").textContent =
+          "パスワードを入力してください。";
+
+        return;
+      }
+
       try {
 
+        // Base64 decode
         const encryptedBytes =
           CryptoJS.enc.Base64.parse(encryptedText);
 
+        // IV取得（先頭16byte）
         const iv =
           CryptoJS.lib.WordArray.create(
-            encryptedBytes.words.slice(0, 4)
+            encryptedBytes.words.slice(0, 4),
+            16
           );
 
+        // Ciphertext取得
         const ciphertext =
           CryptoJS.lib.WordArray.create(
-            encryptedBytes.words.slice(4)
+            encryptedBytes.words.slice(4),
+            encryptedBytes.sigBytes - 16
           );
 
-        const key =
-          CryptoJS.SHA256(password);
+        // SHA256(password)
+        const key = CryptoJS.SHA256(password);
 
+        // AES-CBC decrypt
         const decrypted =
           CryptoJS.AES.decrypt(
-            { ciphertext },
+            { ciphertext: ciphertext },
             key,
-            { iv }
+            {
+              iv: iv,
+              mode: CryptoJS.mode.CBC,
+              padding: CryptoJS.pad.Pkcs7
+            }
           );
 
-        const plainText =
-          decrypted.toString(CryptoJS.enc.Utf8);
+        // WordArray → Uint8Array
+        const words = decrypted.words;
+        const sigBytes = decrypted.sigBytes;
 
+        const uint8Array =
+          new Uint8Array(sigBytes);
+
+        for (let i = 0; i < sigBytes; i++) {
+
+          uint8Array[i] =
+            (words[i >>> 2] >>>
+              (24 - (i % 4) * 8)) & 0xff;
+        }
+
+        // zlib inflate
+        const decompressed =
+          pako.inflate(uint8Array);
+
+        // UTF-8 decode
+        const plainText =
+          new TextDecoder().decode(decompressed);
+
+        // 表示
         document.getElementById("result").textContent =
-          plainText ||
-          "復号に失敗しました。パスワードが正しいか確認してください。";
+          plainText;
 
       } catch (e) {
 
+        console.error(e);
+
         document.getElementById("result").textContent =
-          "復号エラー：" + e.message;
+          "復号エラー:\n" + e.message;
       }
     }
+
+    // -----------------------------
+    // デバッグ表示
+    // -----------------------------
+    console.log("CryptoJS:", typeof CryptoJS);
+    console.log("CryptoJS.AES:", typeof CryptoJS.AES);
+    console.log("pako:", typeof pako);
 
   </script>
 
 </body>
 </html>
-
-<script>
-
-  const debug = document.createElement('pre');
-
-  debug.style.background = '#eee';
-  debug.style.padding = '1em';
-  debug.style.marginTop = '2em';
-
-  debug.textContent =
-    'CryptoJS: ' + typeof CryptoJS + '\n' +
-    'CryptoJS.AES: ' + typeof (CryptoJS && CryptoJS.AES);
-
-  document.body.appendChild(debug);
-
-</script>
-
-<script>
-
-  console.log("CryptoJS:", typeof CryptoJS);
-  // "object" ならOK
-
-  console.log("CryptoJS.AES:", typeof CryptoJS.AES);
-  // "function" ならOK
-
-</script>
 ```
-
